@@ -189,8 +189,20 @@ networks:
     name: signoz-net
 volumes:
   clickhouse:
-    name: signoz-clickhouse
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/signoz/clickhouse
+      o: bind
   sqlite:
-    name: signoz-sqlite
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/signoz/sqlite
+      o: bind
   zookeeper-1:
-    name: signoz-zookeeper-1
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/signoz/zookeeper
+      o: bind
