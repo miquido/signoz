@@ -131,6 +131,7 @@ services:
       - TELEMETRY_ENABLED=true
       - DEPLOYMENT_TYPE=docker-standalone-amd
       - DOT_METRICS_ENABLED=true
+      - SIGNOZ_JWT_SECRET=${SIGNOZ_JWT_SECRET}
       - VIRTUAL_HOST=signoz.miquido.com
       - VIRTUAL_PORT=8080
       - LETSENCRYPT_HOST=signoz.miquido.com
