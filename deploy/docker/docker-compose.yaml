@@ -77,7 +77,7 @@ services:
         mv histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile
     restart: on-failure
     volumes:
-      - ../common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
+      - /home/ec2-user/signoz/deploy/common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
   zookeeper-1:
     !!merge <<: *zookeeper-defaults
     container_name: signoz-zookeeper-1
@@ -101,13 +101,13 @@ services:
     #   - "8123:8123"
     #   - "9181:9181"
     volumes:
-      - ../common/clickhouse/config.xml:/etc/clickhouse-server/config.xml
-      - ../common/clickhouse/users.xml:/etc/clickhouse-server/users.xml
-      - ../common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
-      - ../common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
-      - ../common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
+      - /home/ec2-user/signoz/deploy/common/clickhouse/config.xml:/etc/clickhouse-server/config.xml
+      - /home/ec2-user/signoz/deploy/common/clickhouse/users.xml:/etc/clickhouse-server/users.xml
+      - /home/ec2-user/signoz/deploy/common/clickhouse/custom-function.xml:/etc/clickhouse-server/custom-function.xml
+      - /home/ec2-user/signoz/deploy/common/clickhouse/user_scripts:/var/lib/clickhouse/user_scripts/
+      - /home/ec2-user/signoz/deploy/common/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml
       - /mnt/signoz/clickhouse:/var/lib/clickhouse/
-      # - ../common/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml
+      # - /home/ec2-user/signoz/deploy/common/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml
   signoz:
     !!merge <<: *db-depend
     image: signoz/signoz:${VERSION:-v0.92.1}
@@ -118,8 +118,8 @@ services:
       - "8080:8080" # signoz port
     #   - "6060:6060"     # pprof port
     volumes:
-      - ../common/signoz/prometheus.yml:/root/config/prometheus.yml
-      - ../common/dashboards:/root/config/dashboards
+      - /home/ec2-user/signoz/deploy/common/signoz/prometheus.yml:/root/config/prometheus.yml
+      - /home/ec2-user/signoz/deploy/common/dashboards:/root/config/dashboards
       - /mnt/signoz/sqlite:/var/lib/signoz/
     environment:
       - SIGNOZ_ALERTMANAGER_PROVIDER=signoz
@@ -131,6 +131,10 @@ services:
       - TELEMETRY_ENABLED=true
       - DEPLOYMENT_TYPE=docker-standalone-amd
       - DOT_METRICS_ENABLED=true
+      - VIRTUAL_HOST=signoz.miquido.com
+      - VIRTUAL_PORT=8080
+      - LETSENCRYPT_HOST=signoz.miquido.com
+      - LETSENCRYPT_EMAIL=devops+signoz@miquido.com
     healthcheck:
       test:
         - CMD
@@ -151,8 +155,8 @@ services:
       - --copy-path=/var/tmp/collector-config.yaml
       - --feature-gates=-pkg.translator.prometheus.NormalizeName
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-      - ../common/signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml
+      - /home/ec2-user/signoz/deploy/docker/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - /home/ec2-user/signoz/deploy/common/signoz/otel-collector-opamp-config.yaml:/etc/manager-config.yaml
     environment:
       - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux
       - LOW_CARDINAL_EXCEPTION_GROUPING=false
@@ -184,6 +188,34 @@ services:
       - --dsn=tcp://clickhouse:9000
       - --up=
     restart: on-failure
+  nginx:
+    !!merge <<: *common
+    image: nginxproxy/nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    container_name: nginx
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - /mnt/signoz/certs:/etc/nginx/certs
+      - /mnt/signoz/html:/usr/share/nginx/html
+    labels:
+      - "com.github.nginx-proxy.nginx"
+    restart: unless-stopped
+  acme:
+    image: nginxproxy/acme-companion
+    container_name: nginx-proxy-acme
+    depends_on:
+      - nginx
+    volumes:
+      - /mnt/signoz/certs:/etc/nginx/certs
+      - /mnt/signoz/acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /mnt/signoz/html:/usr/share/nginx/html
+    environment:
+      DEFAULT_EMAIL: devops+signoz@miquido.com
+      NGINX_PROXY_CONTAINER: nginx
+    restart: unless-stopped
 networks:
   signoz-net:
     name: signoz-net
